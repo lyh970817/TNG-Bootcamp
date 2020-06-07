@@ -1,0 +1,1491 @@
+---
+output:
+  prettydoc::html_pretty:
+    theme: cayman
+    highlight: github
+    pandoc_args: ['-F', 'zotref', '-F', 'pandoc-citeproc']
+title: Iteration, Vectorization and Writing Functions
+author: Yuhao Lin
+---
+
+```{r setup, include = FALSE, eval = TRUE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  comment = NA,
+  prompt = FALSE,
+  cache = FALSE,
+  eval = FALSE
+)
+```
+
+```{r clear global environment, include = FALSE, eval = TRUE}
+remove(list = ls())
+```
+
+```{r loading packages, include = FALSE, eval = TRUE}
+library(tidyverse)
+library(kableExtra)
+```
+
+# Introduction
+
+The focus of this session is to learn about tools in R that can help you
+write **DRY** code.
+
+**DRY** as a principle in programming is short for *don't repeat yourself*.
+It refers to reducing repetition of code that has similar patterns.
+
+Consider an example.
+
+A **DRY** solution:
+
+```{r}
+a <- vector(length = 10)
+for (i in 1:10) {
+  a[i] <- i
+}
+```
+
+In comparison to a **WET** (we enjoy typing) solution:
+
+```{r}
+a <- 1
+a <- 2
+a <- 3
+a <- 4
+a <- 5
+a <- 6
+a <- 7
+a <- 8
+a <- 9
+a <- 10
+```
+
+This is not just a matter of how much you have to type. Suppose now
+instead of assigning to variable `a` you want to instead assign to
+variable `b`, only one place in the first code chunk needs to be changed
+but it would be ten in the second!
+
+This is not only relevant to how much you have to type but the more places
+you have to change the more likely you are to make mistakes. Readability
+can be oftentimes be another advantage, others reading your code might get
+overwhelmed with your code because of its lengthiness.
+
+Writing DRY code is important for dealing with messy datasets where
+often similar processing of the data needs to be repeated for many
+times, for instance renaming variables so that the naming follows a
+certain convention.
+
+### Notes on exercises
+
+At the end there are some exercises that I have taken from code I myself
+have written, so they are conceptually quite smilar to what you would
+encounter in real datasets.
+
+### Notes on readings
+
+Readings in this session are optional. The exercises are not built upon the
+readings.
+
+# Topic 0: Defining your own function
+
+We will first quickly touch on the basic syntax of defining functions, to
+prepare for some of the coming materials.
+
+```{r, eval = TRUE}
+echo <- function(x) {
+  x <- as.character(x)
+  return(x)
+}
+
+echo(1)
+```
+
+Here we defined a function called `echo`, with one arguments `x` (you can
+have more). Note the curly brackets are used to combine several lines of
+code to indicate they are all part of the function.
+
+We can rewrite the above as `echo <- function(x) return(x)` if the code has
+only one line.
+
+What does `return` mean?
+
+Literally it means to return the execution flow temporarily "borrowed" by
+the function. So once the `return` is executed in a function it terminates
+and anything after `return` will not be executed.
+
+`return` can also take an expression, so we often use it to report back our
+"final product" produced by a function.
+
+R, however, does not necessarily require explicit `return`. The last expression is
+automatically returned.
+
+
+```{r, eval = TRUE}
+echo <- function(x) {
+  x[1] <- NA
+  x <- as.character(x)
+  x
+}
+
+echo(c(1, 2, 3))
+```
+
+What is 'argument' and 'parameter'?
+
+"Parameter" is the placeholder `x` in `function(x){...}` that is ready to
+accept an "argument" (e.g a value 4 if you specify `x = 4`) to be used
+within the function.
+
+What are "environments"?
+
+Environments are where R will be looking for variable the names of which
+you use in your code.
+
+When you call a function, the function creates its own environment and the
+changes to variables within the function environment would not be reflected
+in the "external", or global environment (in R this is always the case!).
+
+```{r, eval = TRUE}
+a <- c(1, 2, 3)
+echo(x = a)
+
+print(a)
+```
+
+# Topic 1: `Apply` family functions
+
+`apply` family functions are often replacements for explicit for loops in R
+because they are easier to write and read.
+
+**Using a for loop**
+
+```{r, eval = TRUE}
+dat <- mtcars[2:11]
+
+v <- vector() # Initiate an empty variable
+for (i in seq_along(dat)) {
+  # Change this variable
+  v[i] <- mean(dat[, 1], na.rm = T)
+}
+print(v)
+```
+
+**Using an `apply` family function**
+
+`apply` family functions come in varieties (`sapply`, `vapply`, `mapply`,
+etc.) but all end in `apply`. Here we use the `sapply` function for
+demonstration.
+
+```{r, eval = TRUE}
+sapply(dat, mean)
+```
+
+The basic idea is that `sapply` in each iteration takes an element of
+`dat`, which in this case is a column, applies the function `mean` to it
+and then combine the outputs from each iteration.
+
+There are of course a number of ways to combine outputs, but since we used
+s(simplify)apply, R will try to combine them in a vector, the simplest R
+data structure.
+
+Remember that a function takes some input, which in this case is each
+element of the first argument, which would be different depending on object
+types.
+
+* For dataframes, this would be each column in the for of a vector
+  (remember that actually a dataframe column is a list. Try `mtcars[1]` and
+  `mtcars[[1]]`). As a bonus we even get the names of the columns. We will
+  cover named vectors shortly.
+
+* For lists, this would be each list element as a vector.
+
+* For vectors, this would be each single element of length one.
+
+The second argument can be any function. Actually the previous line of code
+can be thought as equivalent to the following.
+
+```{r}
+sapply(dat, function(col) {
+  return(sum(col) / length(col))
+})
+```
+
+Remember how we usually define functions?
+
+```{r}
+mean <- function(x) {
+  return(sum(x) / length(x))
+}
+```
+
+This can be thought of as assigning the object `function(x, y, z){...}` to
+`f`.
+
+Since functions are also objects, it makes sense that they can be used as
+an argument, and as we know the use of `sapply(vector, f)` is legitimate,
+we can replace `f` with the equivalent `function(x, y, z){...}` without
+assigning it to `f`, thereby making this function "anonymous".
+
+Taking advantage of this, We can easily define our own function in place.
+
+```{r}
+sapply(dat, function(col) {
+  col[1:10] <- 0
+  return(col)
+})
+```
+
+So then how are the `apply` family functions different from `for` loops?
+
+The key difference is that for loops modify objects in place (see in the
+above for loop example how we need to initiate an empty variable and assign
+to it in each loop), whereas in `apply` functions any operation is done
+within the second argument (a function) and this function returns some
+output in each iteration (note that we don't need to print to examine the
+content of the variable when using `apply`).
+
+## `Map_<type>` functions
+
+Now before we go any further, I'd like to point out that various design
+issues in base R have been criticised and disliked in general (for example
+the infamous `stringAsfactors`, read about it
+[here](https://simplystatistics.org/2015/07/24/stringsasfactors-an-unauthorized-biography/)).
+
+`tidyverse` brings together several other packages to try to overcome these
+issues and are nowadays generally preferred to base R functions.
+
+Specifically, `purrr` offers a series of `map_<type>` functions as replacement for
+the `apply` family functions, so I will cover them here instead.
+
+For those who are interested, you can read about the different `apply`
+family functions in Chapter 9 of **Learning R**.
+
+In `purrr`, the `map` function returns a list, whereas `map_dbl`,
+`map_char`, `map_lgl` and `map_df` returns a numeric vector, a character
+vector, a logical vector and a dataframe, respectively.
+
+The way I think about this naming convention is that suffixes after the
+underscore represents a restriction of the data type of the returned
+object.
+
+Since you can store any types of data in a list(consider `list(c(1, 2, 3),
+mtcars, mtcars[1])`, `map` means there is no restriction, whereas the rest
+of the `map` function restricts a returned objects to be a certain type,
+and if it cannot coerce the output with `as_<type>` function to that type
+it returns an error (when does this happen? try it out yourself).
+
+Now consider another use case where we are trying to modify an object with
+loops.
+
+**Using a `for` loop**
+
+```{r, eval = FALSE}
+for (i in seq_along(dat)) {
+  dat[, i] <- as.numeric(dat[, i])
+}
+```
+
+*What does `seq_along` do here? Try it on other R data structures.*
+
+**Using `map_df`**
+
+```{r}
+dat <- map_df(dat, as.numeric)
+```
+
+When using `map_df`, we created a new object which is then assigned to
+`dat`, `dat` is modified as a whole.
+
+Now maybe we don't want to modify every column.
+
+```{r}
+for (i in seq_along(dat)) {
+  if (!is.logical(dat[[i]])) {
+    dat[[i]] <- as.numeric(dat[[i]])
+  }
+}
+```
+
+Note that the following won't work
+
+```{r, echo = FALSE}
+dat <- mtcars
+```
+
+```{r, eval = TRUE, error = TRUE}
+dat <- map_df(dat, function(col) {
+  if (any(col > 10)) {
+    as.numeric(col)
+  }
+})
+```
+
+Why? Let's examine with `map` (which poses no restrictions to output types
+thus allowing us to examine the "raw materials" of the type conversion and
+see why it failed.)
+
+```{r, eval = TRUE}
+map(dat, function(col) {
+  if (any(col > 10)) {
+    as.numeric(col)
+  }
+})
+```
+
+Notice we are getting some empty lists which come from the columns for
+which `!is.character` evaluates to `FALSE`.
+
+As `map` must return something in each iteration (in other words, for each
+element of the first argument), if you don't instruct it to return
+something it returns an empty list, which cannot be combined with other
+non-empty vectors to allow convertion to a dataframe.
+
+So let's just make sure it returns something in every iteration.
+
+```{r}
+dat <- map_df(dat, function(col) {
+  if (any(col > 10)) {
+    as.numeric(col)
+  } else {
+    col
+  }
+})
+```
+
+The example also reveals why we call this family of functions `map`, since
+every input must map to an output.
+
+
+## Multivariate map
+
+We can loop through two objects at once (apparently they need to have the same length).
+
+```{r, eval = TRUE}
+map2_dbl(mtcars, mtcars[1, ], function(x, y) {
+  # A trick here is when 'sum' is applied to a logical vector the
+  # TRUEs are treated as 1 and the FALSEs are treated as 0. The
+  # `rowSums` function behaves similarly.
+  sum(x < y)
+})
+```
+
+Or any number of objects
+
+```{r, eval = TRUE}
+a <- c(1, 2, 3)
+b <- c(1, 2, 3)
+c <- c(1, 2, 3)
+
+pmap_dbl(list(a, b, c), function(x, y, z) {
+  x + y + z
+})
+```
+
+## Some usage scenarios
+
+This is useful for a check after I've done a whole punch of processing to
+the data at once. We can see if at least the values appearing in each
+column seem sensible (similar can be used for `table`, `summary` etc.).
+
+```{r, eval = TRUE}
+map(iris, unique)
+```
+
+This is useful to put any processing of the dataframe into pipes. Using
+pipe is often better than not as it removes same unnecessary intermediate
+assignments and improves readability.
+
+```{r, eval = FALSE}
+dat <- dat %>%
+  map_df(function(col) {
+    # Code to modify the column
+    col[is.na(col)] <- NA
+    col <- ifelse(col == 0, "No", "Yes")
+    return(col)
+  }) %>%
+  # Recall that we can use '.' to represent the object before the pipe
+  # last pipe symbol
+  .[complete.cases(dat[[1]])] %>%
+  rowSums(na.rm = T)
+```
+
+Very similarly if you want to keep your intermediate processing of a
+dataframe, instead of
+
+```{r}
+dat_new <- dat
+for (i in 2:ncol(dat_new)) {
+  dat_new[dat_new[, i] == 0, i] <- NA
+}
+```
+
+you can do
+
+```{r}
+dat_new <- map_df(dat, function(col) {
+  col[col == 0] <- NA
+  return(col)
+})
+```
+
+For a complete view of these `map` functions, refer to Chapter 21 in **R for Data Science**.
+
+## `mutate` in `dplyr`
+
+The series of `mutate` functions in `dplyr` has a smilar logic to `map_df`
+but uses more succinct syntax.
+
+```{r}
+dat <- dat %>%
+  mutate_all(~ ifelse(. == 0, NA, .))
+
+dat <- dat %>%
+  mutate_if(is.logical, ~ ifelse(. == 0, NA, .))
+
+dat <- dat %>%
+  mutate_at(vars(cyl, mpg), ~ ifelse(. == 0, NA, .))
+```
+
+Normally these `mutate` functions should be your first go-to option, if
+they don't work, try `map`. `for` loops should be your last resort.
+
+
+# Topic 2: Vectorization in practice
+
+We have seen some examples of some basic vectorized operations in the
+previous session, now we have a look at how we use this feature in
+practice.
+
+```{r, eval = TRUE}
+s <- paste(c("a", "b", "c", "d"), "1", sep = "_")
+print(s)
+```
+
+Notice how we are able to paste the first element (which is a vector) and
+the second element (a scalar) together with one operation.
+
+In other programming languages this might need to be done with a for loop
+(looping through each 'a', 'b', 'c' and 'd' and paste them individually
+with '1').  The ability of R to operate on an entire vector will offer us
+much convenience.
+
+We can use this idea to split strings, too.
+
+```{r, eval = TRUE}
+str_split(s, "_")
+```
+
+Mathematical and logical operators work the same way
+
+```{r, eval = TRUE}
+c(1, 2, 3) == 3
+c(1, 2, 3) + 1
+```
+
+The second argument can actually also be a vector and when it is not it
+gets "recycled" for as many times as the length of the first argument.
+
+They might also be vectors of different lengths but as long as the length
+of one is some multiples of the other, we can still recycle the shorter one
+to make their lengths match.
+
+```{r, eval = TRUE}
+s <- paste(c("a", "b", "c", "d"), c("1", "2", "3", "4", "5"), sep = "_")
+print(s)
+```
+
+Another example that I often use
+
+```{r, eval = TRUE}
+grep("t", colnames(mtcars))
+```
+If you have been learning about the shell, you probably have already seen
+`grep`. In R it does something similar.
+
+Here we search for the string "t" in `colnames(mtcars)`, which is a vector.
+`grep` returns an integer vector indicating the indices of elements in
+`colnames(mtcars)` that contains the string "t".
+
+This is useful for slicing a dataframe.
+
+```{r, eval = TRUE}
+mtcars[grep("t", colnames(mtcars))] %>% head()
+```
+**Side note:** `grep` is short for "globally search a regular expression
+and print". What is a regular expression?  Read about it
+[here](https://stringr.tidyverse.org/articles/regular-expressions.html).
+It's a very powerful text search tool.
+
+**Another side note:** you can actually just do `select(mtcars, matches("t"))`
+with `tidyverse`. But sometimes I still use `grep`, especially with the
+`value` argument, so you can see what matches you are getting.
+
+```{r, eval = TRUE}
+grep("t", colnames(mtcars), value = T)
+```
+
+It is interesting (or maybe unexpected) that vectorization applies
+to dataframes as well.
+
+```{r, eval = TRUE}
+class(mtcars > 5)
+head(mtcars > 5)
+```
+
+This returns a matrix, which you can use to subset a dataframe
+
+```{r, eval = TRUE}
+head(mtcars[mtcars > 5])
+```
+
+However, this does not work for `tibble`s from the `tidyverse` package
+
+```{r, eval = TRUE, error = TRUE}
+as_tibble(mtcars)[mtcars > 5]
+```
+
+Read about the difference between a tibble and a base R dataframe
+[here](https://r4ds.had.co.nz/tibbles.html).
+
+## Using `ifelse` and `case_when`
+
+```{r, eval = TRUE}
+c <- c(2, 4, 6, 8, 10)
+b <- c(1, 2, 3, 4, 5)
+
+a <- ifelse(c %% 2 == 0 & b %% 2 == 0, 0, 1)
+print(a)
+```
+
+The idea is that `ifelse` returns a vector of the same length as the first
+argument.
+
+The first argument always evaluates to a logical vector, which in this case
+it would be `FALSE, TRUE, FALSE, TRUE, FALSE`, then all the `TRUE`s are
+replaced with the second argument, 0 and `FALSE`s are replaced with the
+third argument, 1.
+
+Similar to `paste`, the second and the third argument of `ifelse` doesn't
+have to be of length 1 but can actually be vectors, but the length of the
+first argument (the logical vector) have to be some multiples of the second
+and third so they can be properly recycled.
+
+If we want to use `ifelse` to change an existing object, we can use
+
+```{r, eval = TRUE}
+c <- c(2, 4, 6, 8, 10)
+b <- c(1, 2, 3, 4, 5)
+
+c <- ifelse(b %% 2 != 0, b, c)
+print(c)
+```
+
+An issue with `ifelse` is good for readability but is slow.
+When dealing with large datasets we can use the following which is equivalent.
+
+
+```{r}
+c <- ifelse(b %% 2 != 0, b, c)
+
+# Use a logical vector to match the positions
+pos <- b %% 2 != 0
+c[pos] <- b[pos]
+
+a <- ifelse(c %% 2 == 0 & b %% 2 == 0, 0, 1)
+
+pos <- c %% 2 == 0 & b %% 2 == 0
+a <- vector()
+a[pos] <- 0
+a[!pos] <- 1
+```
+
+The essence here, for the first equivalence,  is that the TRUEs in the
+first argument "guide" the positions we are assigning to in `c` but also
+the positions of elements in `b` that we assign, so the same "position
+indicator" is used for both vectors.
+
+For the second equivalence, they key is to pay attention to how logical
+vectors evaluated from vectors of the same lengths are matched in length.
+
+Because operators such as "==", ">" and "&" don't change the lengths of
+vectors they operate on.
+
+This idea of position and length matching is often useful with tabular data
+because the essence of tabular data is that they have columns and rows of
+the same lengths and an observations in a certain row will have all its
+attributes in that row. So you can be sure that no matter how complex the
+logic you use to select elements from a column, when you apply it to a
+different column, the results would belong to the same observations.
+
+This sounds utterly trivial but is very important to keep in mind.
+
+## Named vectors
+
+Vectors, lists and dataframes (column names) can all have names in R. Using
+a named vector is useful for creating a mapping between two sets of values.
+
+```{r, eval = TRUE}
+a <- c(1, 2, 3)
+names(a) <- c("A", "B", "C")
+print(a)
+```
+
+Two elements in a vector can't have the same names.
+
+```{r, eval = TRUE}
+a <- c(1, 2, 3)
+names(a) <- c("A", "B", "A")
+a["A"]
+```
+
+The assigned vector can be of any type
+
+```{r, eval = TRUE}
+names(a) <- c(T, F, T)
+print(a)
+```
+
+But they get converted to characters.
+
+```{r}
+names(a)
+```
+
+When would this be useful? The first scenario is when we are trying to
+implement something similar to our own version of labelled variables in
+SPSS.
+
+You might have some short column names in a dataframe
+
+```{r, eval = TRUE}
+dat <- mtcars
+names(dat)
+```
+
+But you maybe want to use a set of more descriptive names when you create a
+table or plot.
+
+This is the `tidyverse` way of doing this.
+
+```{r, eval = TRUE}
+dat <- dat %>% rename(MPG = mpg, CYL = cyl, DISP = disp, HP = hp, DRAT = drat)
+names(dat)
+```
+
+But thinking about renaming in terms of a mapping between old names and new
+names we can also do this
+
+```{r}
+old_names <- colnames(mtcars)
+names(old_names) <- c(
+  "MPG", "CYL", "DISP", "HP", "DRAT", "WT",
+  "QSEC", "VS", "AM", "GEAR", "CARB"
+)
+dat <- mtcars %>% rename(!!(old_names))
+```
+
+So this named vector maps every element in `old_names` to an element in its names.
+
+**Side note:** Why `!!` ? Notice that tidyverse often doesn't require quotes
+where base R would. This is because it has a special way of evaluating R
+expressions. Check [Tidy Evaluation](https://tidyeval.tidyverse.org/).
+
+Using pipe and a function `setNames` we can even write the above as
+
+```{r}
+rename <- colnames(mtcars) %>%
+  setNames(toupper(.))
+dat <- mtcars %>% rename(!!(old_names))
+```
+
+**Side note:** sometimes it would be a good idea to put these names (or any
+other type of text) in some files external to an R script and read them in
+with `readLines`.
+
+Because if you put these names in an R script and create
+them directly as a character vector they have to follow R's syntax ( quoted
+and seperated by comas), whereas reading them from a text file only
+requires them to be on separate lines (this can even be relaxed if we use
+some other functions like `read.<type>` where you can specify the delimiter
+yourself).
+
+This can save a lot of editing, avoid many mistakes when you have hundreds
+of names and keep the script from becoming messy.
+
+It also creates this nice modularity that you have things that are left for
+the computer to handle in the script while the names which need to be
+manually created are kept elsewhere.
+
+Consider this example. Here is the first few rows of a table I've taken
+from Wikipedia. Now I want to put this table into an R dataframe.
+
+```
+Compound	SERT	NET	DAT	H1	mACh	α1	α2	5-HT1A	5-HT2A	5-HT2C	D2	MT1A	MT1B
+Agomelatine	?	?	?	?	?	?	?	?	?	631	?	0.1	0.12
+Amitriptyline	3.13	22.4	5380	1.1	18	24	690	450	4.3	6.15	1460	?	?
+Amoxapine	58	16	4310	25	1000	50	2600	?	0.5	2	20.8	?	?
+Atomoxetine	43	3.5	1270	5500	2060	3800	8800	10900	1000	940	>35000	?	?
+Bupropion	9100	52600	526	6700	40000	4550	>35000	>35000	>10000	>35000	>35000	?	?
+Buspirone	?	?	?	?	?	138	?	5.7	138	174	362	?	?
+Butriptyline	1360	5100	3940	?	?	?	?	?	?	?	?	?	?
+Citalopram	1.38	5100	28000	380	1800	1550	>10000	>10000	>10000	617	?	?	?
+Clomipramine	0.14	45.9	2605	31.2	37	39	525	>10000	35.5	64.6	119.8	?	?
+Desipramine	17.6	0.83	3190	110	196	100	5500	>10000	113.5	496	1561	?	?
+Dosulepin	8.6	46	5310	4	26	419	12	4004	152	?	?	?	?
+Doxepin	68	29.5	12100	0.24	83.3	23.5	1270	276	26	8.8	360	?	?
+```
+
+The easiest way is to copy and paste the table to an external file, and
+notice that the delimiter is a tab.
+
+```{r}
+dat <- read.delim("./table.tsv", dec = "\t")
+```
+
+*If you have learned about `factor` in R, creating a factor also requires a
+mapping between the arguments `levels` and `labels`.*
+
+*How would you create a factor by using a named vector?*
+
+## Operation on logical vectors
+
+`all` and `any` can be used to summarize an entire logical vector.
+
+```{r, eval = TRUE}
+a <- c(TRUE, FALSE, TRUE, FALSE)
+b <- c(TRUE, TRUE, TRUE, TRUE)
+
+any(a)
+all(b)
+```
+
+```{r, eval = TRUE}
+a <- c(1, 2, 3, 4, 5)
+any(a > 5)
+```
+
+Another important logical operator is `%in%`
+
+```{r, eval = TRUE}
+a <- c(1, 2, 3, 4, 5)
+
+5 %in% a
+c(1, 2) %in% a
+```
+
+What `%in%` does is really
+
+```{r, eval = TRUE}
+any(a == 5)
+
+map_lgl(c(1, 2), function(x) {
+  any(a == x)
+})
+```
+
+So it goes through elements in the vector before `%in%` and check if any
+element in `a` is equal to that element.
+
+These operators can be used for selecting columns.
+
+```{r, eval = TRUE}
+mtfive <- map_lgl(mtcars, function(col) {
+  any(col > 5)
+})
+mtfive
+
+dat <- mtcars[mtfive]
+colnames(dat)
+```
+
+```{r}
+options(error = recover)
+```
+
+Similar to the idea of using `mutate`, we can use `select` here, which should be your
+first option.
+
+Our concluding remark is that `apply` family functions is that they are no
+faster than explicit for loops, whereas vectorization is significantly
+faster.
+
+The reason is that internally vectorization is actually loops written in C
+(a lower level language closer to machine code) but iteration with `apply`
+is still done in R.
+
+# Topic 3: Writing functions
+
+## Organizing your code
+
+Functions are a great way of organizing your code. Suppose you have to do
+something to slightly different objects in multiple places, instead of
+
+```{r}
+dat1 <- mtcars
+dat2 <- iris
+
+map_dbl(dat1, function(col) {
+  # Note we recode 0s to NA for dat1
+  if (0 %in% col) {
+    col[col == 0] <- NA
+  }
+  sum(is.na(col))
+})
+
+map_dbl(dat2, function(col) {
+  # Note we recode 0s to NA for dat2
+  if (-99 %in% col) {
+    col[col == -99] <- NA
+  }
+  sum(is.na(col))
+})
+```
+
+We can have something like this.
+
+```{r}
+count_na <- function(data, recode) {
+  map_dbl(data, function(col) {
+    # Note we recode 0s to NA for dat1
+    if (recode %in% col) {
+      col[col == recode] <- NA
+    }
+    sum(is.na(col))
+  })
+}
+
+count_na(data = dat1, recode = 0)
+count_na(data = dat2, recode = -99)
+```
+
+We immediately reduced our code by half.
+
+More importantly, suppose now instead of the number of NAs in each column,
+we just want to know if there is any NAs, we only need to change `sum` to
+`any` inside the function definition.
+
+Whereas in the previous chunk of code we would need to do this in two
+places. This is not only tedious but also increase the chance we make a
+mistake. Again this demonstrates the benefit of following the DRY
+principle.
+
+Reorganizing your code into functions should be more or less
+straightforward. The essence of a function is that it not only works for a
+specific objects but for a series of similar objects.
+
+There a key aspect of writing a function is then to make it work for not just a
+vector of x elements or a dataframe of y columns. We need it to work for
+objects of an arbitrary length. With iteration and vectorization, we can do
+this readily.
+
+The rest of the work then mostly really amounts to taking some code you
+have written, identify the bits that might change depending the scenario
+of usage and make them into arguments of the function (e.g. have a look at
+the `recode` argument above). You will get some practice with this from
+the exercises.
+
+## Debugging
+
+A key difference that emerges when we have organized our code into functions
+is that now we are no longer able to execute functions step by step, all
+the code inside a function is executed at once and we cannot examine the
+intermediate steps. This is when using debugging tools in R becomes
+really important.
+
+`traceback`, which allows you to roughly identify the location of the bug,
+and `browser` which allows you to execute code step by step and examine the
+intermediate variables as you would with code outside a function.
+
+You can read about them
+[here](https://www.stat.cmu.edu/~ryantibs/statcomp/lectures/debugging.html)
+(Part 1).
+
+A technique which I personally found quite useful is demonstrated here. Try
+it out yourself after you've read materials on `browser`.
+
+```{r, eval = FALSE}
+for (i in seq(1, 10)) {
+  if (i == 5) {
+    browser()
+  }
+  print(i)
+}
+```
+
+There is also a breakpoint functionality in RStduio which offers a more
+convenient interface to `browser`, see
+[here](https://www.youtube.com/watch?v=q_v2C0KHWSI) for an introduction on
+how to use it.
+
+These debugging tools will be quite useful for the exercises.
+
+But before attempting the exercises  it might be worth-while to look at the
+appendix for some tips to deal with data with NAs, as they normally
+are in real life and this is what I made the practice dataset to be so you
+can get more of a feel with real data.
+
+# Exercises
+
+You are free to use any functions in base R and in the `tidyverse` package.
+
+Each Exercise except for Exercise 2 will have a data file in the
+'Data' folder on Teams. An Exercise might have several
+Questions. In that case you should continue to use your data from the
+previous Question.
+
+Some of the exercises might not be easy to do, but we will go through them
+during the session and talk about any difficulties.
+
+## Exercise 1
+
+**Question 1**
+
+In GLAD questionnaires, -99 is used to indicate "Prefer not to say" and -88
+"Don't know".
+
+Write a function that recodes all the -99s and -88s in a
+dataframe to NA.
+
+**Side note:** recall the difference between `integer` and `double`. In the
+data you wil see both "-99" and "-99.0". How would you deal with this?
+
+```{r, echo = FALSE}
+recode_na <- function(dat) {
+  # -99 and -99.0 doesn't matter
+  dat[dat == -99 | dat == -88] <- NA
+  return(dat)
+}
+
+recode_na <- function(dat) {
+  map_df(dat, function(col) {
+    col[col == -99 | col == -88] <- NA
+  }) %>%
+    return()
+}
+
+recode_na <- function(dat) {
+  mutate_all(dat, function(x) ifelse(x %in% c(-99, -88), NA, x))
+}
+
+recode_na <- function(dat) {
+  mutate_all(dat, ~ ifelse(. %in% c(-99, -88), NA, .))
+}
+```
+
+```{r}
+dat <- recode_na(dat)
+```
+
+**Question 2**
+
+Now test your function on a `dataframe` and a `tibble`. Check and make sure
+it works for both.
+
+**Question 3**
+
+Now write a function that determines whether each row of the dataframe contains
+any NAs.
+
+```{r, echo = FALSE, eval = TRUE}
+is_rowna <- function(data) {
+  as.logical(rowSums(is.na(data)))
+}
+
+is_rowna <- function(data) {
+  apply(data, 1, function(x) {
+    any(is.na(x))
+  })
+}
+```
+
+```{r, eval = TRUE}
+is_rowna(mtcars)
+```
+
+**Question 4**
+
+Now test your function on a `dataframe` and a `tibble`. Make sure it
+works for both.
+
+*Hint: Read documentation of `apply`. What arguments are available?*
+
+# Exercise 2
+
+Write a function that, given a string vector of any number of elements with
+any number of fields, and a field separator, extract fields in specified
+positions. Create your own string and test it.
+
+```{r, echo = FALSE, eval = TRUE}
+get_fields <- function(string, i, sep) {
+  str_split(string, sep) %>%
+    map(., function(x) {
+      x[i]
+    })
+}
+
+s <- paste(c("a", "b", "c", "d"), "1", sep = "_")
+```
+
+```{r, eval = TRUE}
+print(s)
+
+get_fields(string = s, i = 1, sep = "_")
+get_fields(string = s, i = c(1, 2), sep = "_")
+```
+
+# Exercise 3
+
+# Fit a hurdle model and make a table
+
+Hint: after you get your model output, use
+`summary(your_model)`$coefficent` to get the required table.
+
+
+*Hint: `formula` objects are quite special in R. Read about them
+[here](https://www.datacamp.com/community/tutorials/r-formula-tutorial#formulas).
+Notice that in `var ~ x1 + x2`, `var`, `x1`, and `x2` are column names but
+they don't have quotes around, unlike when you use `dat["var"]` to select a
+column. What problem will this cause? You would need `as.formula` for this.*
+
+# Exercise 4
+
+An "array" variable in the UK Biobank database is a variable allowing
+multiple options to be selected at once.
+
+A question item to be coded as an array variable would be shown to
+participants in the following way:
+
+What did you have for breakfast this morning?
+
+    1. Bacon
+
+    2. Omelette
+
+    3. Sausages
+
+    4. Mushrooms
+
+    5. Milk
+
+A participant can choose none to all five of the options at once and the
+variable would be coded in the following way:
+
+Suppose a participant chose 1, 2, and 4, the row of this participant would be:
+
+```{r, echo = FALSE, eval = TRUE}
+dat <- tribble(
+  ~breakfast_1, ~breakfast_2, ~breakfast_3, ~breakfast_4, ~breakfast_5,
+  1, 2, 4, NA, NA,
+)
+kable(dat)
+```
+
+Suppose a participant chose 2, 3, and 5, the row of this participant would be:
+
+```{r, echo = FALSE, eval = TRUE}
+dat <- tribble(
+  ~breakfast_1, ~breakfast_2, ~breakfast_3, ~breakfast_4, ~breakfast_5,
+  2, 3, 5, NA, NA,
+)
+kable(dat)
+```
+
+Suppose a participant chose 1, 2, 3, 4 and 5, the row of this participant would be:
+
+```{r, echo = FALSE, eval = TRUE}
+dat <- tribble(
+  ~breakfast_1, ~breakfast_2, ~breakfast_3, ~breakfast_4, ~breakfast_5,
+  1, 2, 3, 4, 5,
+)
+kable(dat)
+```
+
+Note that the names of the columns do not indicate options (although there
+are as many columns as there are options), but are in the form of a prefix
+representing a question (breakfast) plus an index (_1).
+
+**Question 1**
+
+Now suppose we have a vector consist of the column names of a subset of
+variables frome the UK Biobank.
+
+```{r, eval = TRUE}
+names <- c(
+  "breakfast_1",
+  "breakfast_2",
+  "breakfast_3",
+  "breakfast_4",
+  "breakfast_5",
+  "lunch_1",
+  "lunch_2",
+  "dinner_1",
+  "dinner_2",
+  "dinner_3",
+  "dinner_4",
+  "brunch_1",
+  "brunch_2",
+  "brunch_3"
+)
+```
+
+Write a function that, given the name of any column of an array variable
+with an arbitrary question prefix, find all the column names of that array
+variable from the list.
+
+```{r, echo = FALSE, eval = TRUE}
+get_arrays <- function(var, list) {
+  prefix <- str_split(var, "_")[[1]][[1]]
+  grep(prefix, list, value = T)
+}
+```
+
+```{r, eval = TRUE}
+get_arrays("breakfast", names)
+get_arrays("dinner", names)
+```
+
+Now look again at the values of the array columns. When doing analyses we
+cannot put these columns into our models, instead we need to recode them to
+meaningful variables.
+
+One way to do this is to convert all the columns to binary variables, where
+for each of them only 1s and 0s are allowed and 1 indicates that the
+participant selected the option represented by that variable and 0
+indicates that he or she didn't.
+
+Therefore, for the previous participant who selected 2, 3, and 5, the row
+in the recoded data should be:
+
+```{r, echo = F, eval = TRUE}
+dat <- tribble(
+  ~Bacon, ~Omelette, ~Sausages, ~Mushrooms, ~Milk,
+  1, 1, 0, 1, 0,
+)
+kable(dat)
+```
+
+For the participant who selected 2, 3, and 5, the row of this participant
+would be:
+
+```{r, echo = F, eval = TRUE}
+dat <- tribble(
+  ~Bacon, ~Omelette, ~Sausages, ~Mushrooms, ~Milk,
+  0, 1, 1, 0, 1,
+)
+kable(dat)
+```
+
+For the participant who selected all the options, the row of this participant
+would be:
+
+```{r, echo = F, eval = TRUE}
+dat <- tribble(
+  ~Bacon, ~Omelette, ~Sausages, ~Mushrooms, ~Milk,
+  1, 1, 1, 1, 1,
+)
+kable(dat)
+```
+
+**Question 2**
+
+The "array" variables in the GLAD questionnaire are coded in a simpler but
+different fashion.
+
+```{r, eval = TRUE, echo = FALSE}
+dat <- tibble(
+  Bacon = c("Bacon", "No Bacon", "Bacon"),
+  Omelette = c("Omelette", "Omelette", "Omelette"),
+  Sausages = c("No Sausages", "Sausages", "Sausages"),
+  Mushrooms = c("Mushrooms", "No Mushrooms", "Mushrooms"),
+  Milk = c("No Milk", "Milk", "Milk")
+)
+kable(dat)
+```
+
+Write a function that recodes a dataframe of GLAD array variables to a
+binary format.
+
+```{r, echo = FALSE, eval = TRUE}
+chr_to_binary <- function(dat) {
+  dat <- map2_df(dat, names(dat), function(col, name) {
+    col[col == name] <- 1
+    col[col == paste("No", name)] <- 0
+    return(col)
+  })
+  return(dat)
+}
+```
+
+```{r, echo = TRUE, eval = TRUE}
+chr_to_binary(dat)
+```
+
+**Question 3**
+
+Given a dataframe consist of binary variables, write a function that
+convert the columns to array variable format in UK Biobank.
+
+The function should take the following arguments:
+
+* A dataframe consist of an arbitrary number of binary variables.
+
+* A question name prefix (e.g. breakfast for the question "What did you
+  have for breakfast this morning?").
+
+*Hint: to generate a sequence from 1 to n, use `1:n`*
+
+*Hint: `t()` can be used to transpose a matrix or dataframe and `transpose`
+from `purrr` can be used on dataframes.*
+
+*If you're not sure what "transpose" means, check
+[here](https://chortle.ccsu.edu/VectorLessons/vmch13/vmch13_14.html)*
+
+
+```{r, echo = FALSE, eval = TRUE}
+to_array <- function(dat, prefix) {
+  names <- paste(prefix, 1:ncol(dat), sep = "_")
+
+  dat <- apply(dat, 1, function(row) {
+    num <- which(row == 1)
+    row <- vector(length = length(row))
+    row[1:length(num)] <- num
+    return(row)
+  }) %>%
+    t() %>%
+    as_tibble() %>%
+    setNames(names)
+
+  return(dat)
+}
+```
+```{r, eval = TRUE}
+dat <- tribble(
+  ~Bacon, ~Omelette, ~Sausages, ~Mushrooms, ~Milk,
+  1, 1, 0, 1, 0,
+  0, 1, 1, 0, 1,
+  1, 1, 1, 1, 1,
+)
+```
+
+```{r, echo = FALSE, eval = TRUE}
+kable(dat)
+```
+
+```{r, echo = TRUE,  eval = TRUE}
+prefix <- "breakfast"
+to_array(dat, prefix)
+```
+
+**Question 4**
+
+Given a number of data columns in the format of array variables, write a
+function that convert the columns to binary variable format.
+
+The function should take the following arguments:
+
+* A dataframe consist of an arbitrary number of array variables.
+
+* A vector of variable names of the same length as the number of the array
+  variables.
+
+```{r, echo = FALSE, eval = TRUE}
+to_binary <- function(dat, names) {
+  for (i in ncol(dat):1) {
+    lpos <- which(rowSums(dat[1:i] == i, na.rm = T) == 1)
+    dat[[i]] <- 0
+    dat[[i]][lpos] <- 1
+  }
+  names(dat) <- names
+  return(dat)
+}
+```
+```{r, eval = TRUE}
+dat <- tribble(
+  ~breakfast_1, ~breakfast_2, ~breakfast_3, ~breakfast_4, ~breakfast_5,
+  2, 3, 5, NA, NA,
+  1, 2, 4, NA, NA,
+  1, 2, 3, 4, 5,
+)
+```
+
+```{r, echo = FALSE, eval = TRUE}
+kable(dat)
+```
+
+```{r, eval = TRUE}
+names <- c("Bacon", "Omelette", "Sausages", "Mushrooms", "Milk")
+to_binary(dat, names)
+```
+
+**Question 5**
+
+Now check that your function returns the same dataframe as the one
+produced in Question 2 with `all.equal`.
+
+# Exercise 5
+
+**Question 1**
+
+Write a function that, given a dataframe of two columns representing a
+mapping between two sets of variable names ('new_name' and 'old_name'),
+returns the elements in 'new_name' that doesn't have exactly one
+corresponding 'old_name' and vice versa. The function output can be in
+whatever format as long as you can tell where the incorrect name mappings
+are.
+
+Note that the same names can appear multiple times in different rows.
+
+```{r, echo = FALSE, eval = TRUE, message = FALSE}
+
+test_name <- function(dat, from = 1) {
+  list <- list()
+  past <- vector()
+  for (i in 1:nrow(dat)) {
+    to <- 3 - from
+    name <- dat[[from]][i]
+    if (is.na(past[name])) {
+      past[name] <- dat[[to]][i]
+    } else {
+      if (past[name] != dat[[to]][i]) {
+        list[[name]] <- unique(c(past[name], list[[name]], dat[[to]][[i]]))
+      }
+    }
+  }
+  return(list)
+}
+name_map <- read_delim("./Data/dat_e5_demo.txt", delim = " ")
+```
+
+The output doesn't have to be the same as my function. As long as the
+output of your function is sufficient for you to complete Question 2 then
+it's fine.
+
+```{r, eval = TRUE}
+test_name(name_map, from = 1)
+test_name(name_map, from = 2)
+```
+
+**Question 2**
+
+Fix the names so that they have a one-to-one mapping. Check this with the function you wrote.
+
+**Question 3**
+
+There is a slightly simpler solution using `group_by` and `filter`. See if
+you can figure it out.
+
+*Hint: depending on how you approach this, you might need to be careful
+with `tidy evaluation` here, because tidyverse functions have no way of
+telling if an unquoted string is a variable or is a column name in your
+data (actually it always thinks it's the latter). The trick is to use
+`!!sym()` for variable. Refer to the reading if you want to know why.*
+
+```{r, echo = FALSE, eval = TRUE}
+test_name <- function(dat, from) {
+  f <- colnames(dat)[from]
+  t <- colnames(dat)[-from + 3]
+  tab <- dat %>%
+    group_by(!!sym(f)) %>%
+    filter(length(unique(!!sym(t))) != 1) %>%
+    pull()
+}
+```
+
+# Exercise 6
+
+Create a function that calculates the mode with `group_by` and `summarize`.
+
+Hint: `group_by` is most normally used on a factor. This is not the case
+for this question.  What happens when you use `group_by` on something else?
+and how does summarize act on grouped data?
+
+```{r}
+
+```
+
+
+# Appendix: Getting some overview of a large dataset
+
+How would you get an overall picture of the datasets if there are thousands
+of rows and columns and perhaps half of them are NAs?
+
+* `View` is not a good method.
+
+  It's slow and with many NAs you don't know how long you need to scroll
+  before seeing some actual values.
+
+  Some of you might become interested in using a code editor (with R VSCode
+  would be the best I've tried), which probably does not have such nice
+  functionalities as in RStudio.
+
+* `head` sometimes works but with many NAs at the beginning of the data it
+  is not giving much information.
+
+* Plotting is a good way but extreme values tend not to be shown.
+
+Now I will demonstrate how to use some different functions to get a more
+abstract overview of the data.
+
+For the entire dataframe
+
+```{r, eval = TRUE}
+names(mtcars)
+dim(mtcars)
+nrow(mtcars)
+ncol(mtcars)
+```
+
+For dataframe columns
+
+```{r, eval = TRUE}
+unique(mtcars["cyl"])
+table(mtcars["cyl"])
+summary(mtcars["cyl"])
+```
+
+But can be easily extended to the entire dataframe with `map`
+
+```{r}
+map(mtcars, unqiue)
+```
+
+## Obtaining a set of elements from a vector with NAs
+
+Suppose we have a vector (with some NAs, since you simply never see
+anything in real life withot NAs!)
+
+```{r, eval = TRUE}
+v <- c(1, 2, 3, 4, NA)
+```
+
+Now we want to get elments smaller than 4. It might be tempting to do this.
+
+```{r, eval = TRUE}
+v[v < 4]
+```
+
+However, note that there is an additional NA element at the end. This is
+because in `v<4`, `NA < 4` evaluates to NA. A way to overcome this is to safeguard it with `which`.
+
+```{r, eval = TRUE}
+v[which(v < 4)]
+which(v < 4)
+```
+
+You can be sure that `which` returns no NAs, just a bunch of integers.
+
+## Using summary functions
+
+You would almost always need `na.rm = T` or variants of which in summary
+functions like `mean`, `sum`, `rowSums`, `cor` etc. Because with this
+argument these functions return NAs if its input contains one or more NAs.
+
+```{r, eval = TRUE}
+sum(c(1, 2, NA))
+```
+
+```{r, eval = TRUE}
+sum(c(1, 2, NA), na.rm = T)
+```
+

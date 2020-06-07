@@ -1,0 +1,860 @@
+---
+output:
+  prettydoc::html_pretty:
+    theme: cayman
+    highlight: github
+    pandoc_args: ['-F', 'zotref', '-F', 'pandoc-citeproc']
+title: Programming In Base R
+author: Yuhao Lin
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  comment = NA,
+  prompt = TRUE,
+  cache = FALSE,
+  eval = TRUE
+)
+```
+
+```{r clear global environment, include = FALSE}
+remove(list = ls())
+```
+
+```{r loading packages, include = FALSE}
+library(tidyverse)
+```
+
+# Introduction
+
+This session is going to be slightly different from the previous ones,
+whereas in the previous sessions we focused on using `tidyverse` for doing
+data analysis, in this session we will focus on about base R to complete
+some more programming-oriented tasks.
+
+The rationale of this is, it is firstly always good to learn about the
+lower level details of things. These `tidyverse` functions have base R
+functions as their building blocks (at least in a conceptual sense if not in
+the actual implementation).
+
+This will aid your understanding of the higher level abstractions. For
+instance we will see in the next session that `mutate_all` can be thought
+of as a `for` loop through all the columns of a data frame. Secondly, as
+the next session will be focusing on techniques for writing functions, it
+is easier to write functions in base R, because `tidyverse` has a different
+style of evaluation. To see this, look at the following example:
+
+* `tidyerse` function
+
+```{r}
+dat <- mutate(mtcars, cyl = cyl * 2)
+```
+
+* Base R function
+
+```{r}
+dat["cyl"] <- dat["cyl"] * 2
+```
+
+Notice that when referring to the column "cyl" we need quotes for using a
+base R function but not for `mutate` (in R `[` indeed is a function).
+
+There are optional exercises at the end of this session, please at least
+read and think about them. We will go through them during the session. If
+you have questions about your code you could send your script to Yuhao Lin
+on Teams before the session. Please also indicate whether you would be
+happy for me to use your code as an example during the session (anonymously
+of course).
+
+# Data Types
+
+Two basic types of things/objects: **data** and **functions**
+
+- **Data**: things like 7, "seven", $7.000$, and $\left[ \begin{array}{ccc} 7 & 7 & 7 \\ 7 & 7 & 7\end{array}\right]$
+- **Functions**: things like `log`, `+` (takes two arguments), `<` (two), `%%` (two), and `mean` (one)
+
+  a function is like a machine which turns input objects, or **arguments**,
+  into an output object, or a **return value**(a return value is to be thought
+  of as something you can assign to a variable. So if a function prints
+  something in the console that you cannot assign it is not a return value
+  (one of the main reason that we write user-defined functions is that we
+  want to organize our code so we don't have to code out our solutions every
+  time).
+
+  It might also do other things like deleting an existing variable.
+
+```{r}
+rm(a)
+```
+
+Anything else other than outputting a return value that a function does
+  is called a side effect.
+
+Note that in R on the outset a function almost never modify an object in
+  place but instead would return something, regardless of what the function
+  name might imply. Actually there is a function called `modify` in `purrr`
+  that returns an object that has the same type as its input.
+
+Basic data types in R:
+
+- **Booleans**:  `TRUE` or `FALSE` in R
+- **Integers**: whole numbers (positive, negative or zero)
+- **Characters**: letters or symbols **strings**: sequences of characters
+- **Floating point numbers**: any number with a decimal place, because of
+  how float calculations work, rounding is a bit dodgy so watch out’
+
+  (a bit more detail: In R this type is often referred to as `double` or
+  `numeric`. Because computers cannot really store a number with arbitrary
+  decimal places so a floating point numbers have certain precision.
+  `double` refers to "double precision" floating point numbers (there is no
+  single precision floating point numbers in R))
+
+- **Missing or ill-defined values**: `NA`, `NaN`, etc.
+
+## Operators
+
+- **Unary**: takes just one argument. E.g., `-` for arithmetic negation,
+  `!` for Boolean negation
+- **Binary**: take two arguments. E.g., `+`, `-`, `*`, and `/` . Also, `%%`
+  (for mod), `%/%` (for integer division) and `^`
+
+```{r}
+-7
+7 + 5
+7 - 5
+```
+
+```{r}
+7 * 5
+7^5
+7 / 5
+7 %% 5
+7 %/% 5
+```
+
+## Comparison operators
+
+These are also binary operators; they take two objects, and give back a Boolean
+
+```{r}
+7 > 5
+7 < 5
+7 >= 7
+```
+
+
+```{r}
+7 <= 5
+7 == 5
+7 != 5
+```
+
+Warning: `==` is a comparison operator, `=` is not!
+
+## Logical operators
+
+These basic ones are `&` (and) and `|` (or)
+
+```{r}
+(5 > 7) & (6 * 7 == 42)
+(5 > 7) | (6 * 7 == 42)
+(5 > 7) | (6 * 7 == 42) & (0 != 0)
+(5 > 7) | (6 * 7 == 42) & (0 != 0) | (9 - 8 >= 0)
+```
+
+## More types
+
+- The `typeof()` function returns the data type
+- `is.foo()` functions return Booleans for whether the argument is of type *foo*
+- `as.foo()` (tries to) "cast" its argument to type *foo*, to translate it sensibly into such a value
+- `foo` is just a meaningless placeholder word used commonly in programming
+  (also there is `bar`).
+
+```{r}
+typeof(7)
+is.numeric(7)
+is.na(7)
+is.na(7 / 0)
+7 / 0
+is.na(0 / 0)
+0 / 0
+```
+
+
+```{r}
+is.character(7)
+is.character("7")
+is.character("seven")
+is.na("seven")
+```
+
+
+```{r}
+as.character(5 / 6)
+as.numeric(as.character(5 / 6))
+6 * as.numeric(as.character(5 / 6))
+5 / 6 == as.numeric(as.character(5 / 6))
+```
+
+# Data Structures
+
+## First data structure: vectors
+
+- A **data structure** is a grouping of related data values into an object
+- A **vector** is a sequence of values, all of the same type
+
+Note that although we imply here the distinction between a "value" (an
+  element) and a vector (a group) to aid understanding, a "value" such as
+  in the example above `as.character(5 / 6)` is really a single element
+  vector, which means all of the functions mentioned above actually all
+  apply to vectors.
+
+
+```{r}
+x <- c(7, 8, 10, 45)
+x
+is.vector(x)
+```
+
+- The `c()` function (`c` meaning "combine") returns a vector containing
+  all its arguments in specified order
+
+- `1:5` is shorthand for `c(1,2,3,4,5)`, and so on `x[1]` would be the
+  first element, `x[4]` the fourth element, and `x[-4]` is a vector
+  containing *all but* the fourth element
+
+
+`vector(length=n)` returns an empty vector of length *n*; helpful for filling things up later
+
+```{r}
+weekly.hours <- vector(length = 5)
+weekly.hours
+weekly.hours[5] <- 8
+weekly.hours
+```
+
+### Vector arithmetic
+
+Arithmetic operator apply to vectors in a "element-wise" fashion
+
+```{r}
+x <- c(7, 8, 10, 45)
+y <- c(-7, -8, -10, -45)
+x + y
+x * y
+```
+
+### Recycling
+
+**Recycling** repeat elements in shorter vector when combined with a longer
+one. Note that to be able to properly repeat elements, the longer vector
+needs to have length divisiable by the shorter one.
+
+```{r}
+x + c(-7, -8)
+x^c(1, 0, -1, 0.5)
+x + c(1, 2, 3)
+```
+
+Single numbers are vectors of length 1 for purposes of recycling:
+
+```{r}
+2 * x
+```
+
+---
+
+Can do elementwise comparisons with vectors:
+
+```{r}
+x > 9
+```
+
+Logical operators also work elementwise:
+
+```{r}
+(x > 9) & (x < 20)
+```
+
+
+### Indexing vectors
+
+Often we want to extract elements from a vector, indexing allows us to pick
+elements from a vector by knowing where they are (or their labels, which we
+will get to) but without needing to know what they are.
+
+Vector of indices:
+
+```{r}
+x[c(2, 4)]
+```
+
+Vector of negative indices:
+
+```{r}
+x[c(-1, -3)]
+```
+
+Boolean vector:
+
+Similarly we can use a boolean vector (containing `TRUE` and `FALSE`) to
+indicate the positions.
+
+```{r}
+x > 9
+x[x > 9]
+y[x > 9]
+```
+
+Pay close attention to how this indexing works. `x > 9` gives us a logical
+vector which is then used by `[]` to do the indexing - this is a two-stage
+process.
+
+If we use
+
+```{r}
+x[c(FALSE, FALSE, TRUE, TRUE)]
+```
+
+It would give the same result.
+
+`which()` gives the elements of a Boolean vector that are `TRUE`:
+
+```{r}
+places <- which(x > 9)
+places
+y[places]
+```
+
+We can give names to elements of vectors, and index vectors accordingly
+
+```{r}
+names(x) <- c("v1", "v2", "v3", "f")
+names(x)
+x[c("f", "v1")]
+```
+
+Note: here R is printing the labels, these are not additional elements of `x`
+
+
+`names()` returns another vector (of characters):
+
+```{r}
+names(y) <- names(x)
+sort(names(x))
+which(names(x) == "fred")
+```
+
+## List
+
+A **list** is sequence of values, but not necessarily all of the same type.
+It is mostly to store data with complex (e.g. nested structures) such as
+statistical model output.
+
+```{r}
+my.list <- list("exponential", 7, FALSE)
+my.list
+```
+
+Most of what you can do with vectors you can also do with lists
+
+### Accessing pieces of lists
+
+- `[ ]` returns a list.
+- `[[ ]]` drops names and structures (returns an unnamed vector)
+
+```{r}
+my.list[2]
+my.list[[2]]
+my.list[[2]]^2
+```
+
+Here we emphasize the difference between **list** and **vector**, two
+  seemingly similar data structures, because although they appear similar
+  the functions we can use on them are different.
+
+Actually most of the commonly used based R functions are only for vectors
+  (this is not the case in `tidyverse` (with many functions operating on
+  dataframes) which we will see in the next session).
+
+```{r}
+mean(c(1, 2, 3))
+mean(list(1, 2, 3))
+```
+
+### Expanding and contracting lists
+
+Add to lists with `c()` (also works with vectors):
+
+```{r}
+my.list <- c(my.list, 9)
+my.list
+```
+
+Pluck out all but one piece of a list (also works with vectors):
+
+```{r}
+my.list[-2]
+```
+
+### Names in lists
+
+We can name some or all of the elements of a list:
+
+```{r}
+names(my.list) <- c("family", "mean", "is.symmetric")
+my.list
+my.list[["family"]]
+my.list["family"]
+```
+
+---
+
+Lists have a special short cut way of using names, with `$`:
+
+```{r}
+my.list[["family"]]
+my.list$family
+```
+
+Adding named elements:
+
+```{r}
+my.list$was.estimated <- FALSE
+my.list[["last.updated"]] <- "2015-09-01"
+```
+
+Note that we are assigning to a non-existent column - that column will be
+created upon assignment.
+
+By now you have probably realized that lists are somewhat similar to data
+frames - they can have many elements of different types which can be
+accessed both with the dollar sign. Internally a data frame column actually is a list.
+
+The key difference between them is a trivial but important one. Data frames
+store **tabular** data, in that they are rectangular tables (think of how
+each column in a data frame must have the same length) whereas lists can
+have elements of different lengths.
+
+## Data frames
+
+We can also access the elements (columns) of a data frame also with `[]`
+and `[[]]`. Theoretically, the elments could also be rows or even
+individual cell values, but R takes a column (variable) centered approach.
+
+The way of indexing and subsetting dataframes in base R is, as some
+  people believe, not entirely intuitive or consistent. That's why we often
+  use `tibble` from `tidyverse`, which is essentially an enhanced version
+  of data frames but are compatible with all the data frame operations but
+  might behave slightly differently in some cases. There is also similarly,
+  `data.table` from the `data.table` package, which has a focus on
+  performance (so if you have a large data set).
+
+```{r}
+mtcars[1]
+# returns a data frame
+```
+
+```{r}
+mtcars_tbl <- as_tibble(mtcars)
+mtcars_tbl[1]
+# But if the dataframe is a `tibble` it returns a dataframe,
+```
+
+```{r}
+mtcars[[1]]
+# returns a vector
+```
+
+Note that we emphasize the difference here because similarly dataframes,
+lists and vectors accept different functions.
+
+It should be apparent that we can do `mtcars[c(1, 2)]` but not
+`mtcars[[c(1, 2)]]` because a vector is one dimensional. The latter is
+actually allowed in R but does not return columns. Experiment with this if
+you're interested.
+
+```{r}
+mtcars$mpg
+# returns a vector
+```
+
+We might also need to subset rows of a dataframe. We use this notation,
+
+```{r}
+mtcars[c(1, 2), c(2, 3)]
+# which means rows 1 and 2, of columns 2 and 3.
+```
+
+```{r}
+mtcars[c(1, 2), ]
+# means rows 1 and 2 of all the column.
+```
+
+Similarly we can use this notation with columns
+
+```{r}
+mtcars[, c(1, 2)]
+# returns a data frame
+```
+
+```{r}
+mtcars[, 1]
+# returns a vector.
+```
+
+Data frames can have names (the column names) and they can also be used for
+subsetting.
+
+In addition, logical vectors can be used for subsetting as well,  which is
+similar to how it is used with vectors. Try these out yourself.
+
+
+# Control flow
+
+Summary of the control flow tools in R:
+
+- `if()`, `else if()`, `else`: standard conditionals
+- `ifelse()`: conditional function that vectorizes nicely
+
+## `if()` and `else`
+
+Use `if()` and `else` to decide whether to evaluate one block of code or another, depending on a condition
+
+```{r}
+x <- 0.5
+
+if (x >= 0) {
+  x
+} else {
+  -x
+}
+```
+
+- Condition in `if()` needs to give one `TRUE` or `FALSE` value
+- Note that the `else` statement is optional
+- Single line actions don't need braces, i.e., could shorten above to `if (x >= 0) x else -x`
+
+## `else if`
+
+We can use `elseif()` arbitrarily many times following an `if()` statement
+
+```{r}
+x <- -2
+
+if (x^2 < 1) {
+  x^2
+} else if (x >= 1) {
+  2 * x - 1
+} else {
+  -2 * x - 1
+}
+```
+
+- Each `elseif()` only gets considered if the conditions above it were not `TRUE`
+- The `else` statement gets evaluated if none of the above conditions were `TRUE`
+- Note again that the `else` statement is optional
+
+
+## `for` loops
+
+A `for()` loop increments a **counter** variable along a vector. It repeatedly runs a code block, called the  **body** of the loop, with the counter set at its current value, until it runs through the vector
+
+```{r}
+log.vec <- c()
+for (i in 1:10) {
+  log.vec[i] <- log(i)
+}
+log.vec
+```
+
+Here `i` is the counter and the vector we are iterating over is `1:n`. The
+body is the code in between the braces. Note that in general the braces are
+only used to combine multiple lines of code. So if the body of `for` is
+only one line we can use `for(i in 1:10) log.vec[i] = log(i)`.
+
+Notice how we need to "initiate" a empty variable `log.vec` before the
+loop. Try running the code with this initialization, what happens?
+
+Let's look another relevant example demonstrating the idea of initialization.
+
+```{r}
+sum <- 0
+for (i in 1:100) {
+  sum <- sum + i
+}
+print(sum)
+```
+
+### Breaking from the loop
+
+We can **break** out of a `for()` loop early (before the counter has been iterated over the whole vector), using `break`
+
+```{r}
+n <- 10
+log.vec <- vector(length = n, mode = "numeric")
+for (i in 1:n) {
+  log.vec[i] <- log(i)
+  if (log(i) > 2) {
+    cat("I'm outta here. I don't like numbers bigger than 2\n")
+    break()
+  }
+}
+log.vec
+```
+
+There is also `next()`, which allows you to skip to the next iteration.
+
+```{r}
+n <- 10
+for (i in 1:n) {
+  if (i == 2) {
+    next()
+  }
+  print(i)
+}
+```
+
+Finally notice that in a for loop R does not automatically print to the
+console when a command is executed.
+
+```{r}
+for (i in 1:10) {
+  i * 10
+}
+```
+
+We need to use `print`. Why? Because in R `for` is actually also a
+function. So the results of your computation stays within the function
+environment unless you return something, but `for` restricts the return
+value to be `NULL` (more on this the next session).
+
+```{r}
+for (i in 1:10) {
+  print(i * 10)
+}
+```
+
+### Variations on standard `for()` loops
+
+Many different variations on standard `for()` are possible. Two common ones:
+
+- Non-numeric counters: counter variable always gets iterated over a vector, but it doesn't have to be numeric
+- Nested loops: body of the `for()` loop can contain another `for()` loop (or several others)
+
+```{r}
+for (str in c("Prof", "Ryan", "Tibs")) {
+  print(paste(str, "declined to comment"))
+}
+```
+
+More generally, any data structure that yo can loop through is called an
+iterable. Vectors, lists and data frames (and its variants like `tibble`)
+are all iterables. Be careful with what your counter represents in
+different data structures (experiment with this yourself!).
+
+```{r}
+for (i in 1:4) {
+  for (j in 1:i^2) {
+    print(paste(j, ""))
+  }
+  print("ABC")
+}
+```
+
+How many times `print(paste(j,""))` is executed in the second loop? How do
+you calculate this?
+
+
+# Exercises
+
+## Exercise 1
+
+Translate the following code using `tidyverse` functions to code using base
+R functions with the data set from the **Descriptives** session
+
+```{r, eval = F}
+
+dat1 <- dat %>%
+  select(
+    dem.age,
+    dem.alevels,
+    dem.employment,
+    bmi.cur
+  ) %>%
+  mutate(
+    dem.age_mean_by_sex = mean(dem.age, na.rm = T),
+    dem.age_sd_by_sex = sd(dem.age, na.rm = T)
+  ) %>%
+  rename(
+    "Mean" = dem.age_mean_by_sex,
+    "SD" = dem.age_mean_by_sex
+  ) %>%
+  filter(bmi.cur > 20)
+```
+
+As the next two exercises mainly concerns writing loops, we need to look a
+bit at a simple way to debug which will really help you identity sources of
+errors if you make a mistake in your code when writing those loops.
+
+Suppose now we want to write a for loop to print out all the elements in
+`x` converted to `numeric`.
+
+```{r}
+x <- c("1", "b", "3")
+for (i in 1:3) {
+  print(as.numeric(x[i]))
+}
+```
+
+So we get a warning and an `NA`. Now in real life the content of `x` might
+not be completely transparent to you, maybe because it might have too many
+elements. So we would need a way to investigate what happens within the
+loop loop. To do this we use the `print` function.
+
+
+```{r}
+x <- c("1", "b", "3")
+for (i in 1:3) {
+  print(x[i])
+  print(as.numeric(x[i]))
+}
+```
+
+Now we see "b" cannot be converted to numeric.
+
+
+## Exercise 2
+
+Use a for loop to generate a Fibonacci sequence up to the 8th term.
+The Fibonacci Sequence is the series of numbers:
+
+$0, 1, 1, 2, 3, 5, 8, 13, 21, 34, ...$
+
+The first two numbers are $0$ and $1$. Any number after the first two is
+found by adding up the two numbers before it.
+
+**Note: do not use recursion (defining a function that calls itself) or the
+closed-form formula for the sequence if you come across them.**
+
+**Hint: the first few lines can be:**
+
+```{r}
+i1 <- 0
+i2 <- 1
+for (i in 1:8) {}
+```
+
+```{r, echo = FALSE, eval = F}
+i1 <- 0
+i2 <- 1
+for (i in 1:8) {
+  if (i == 1) {
+    num <- i1
+  } else if (i == 2) {
+    num <- i2
+  } else {
+    num <- i1 + i2
+    i1 <- i2
+    i2 <- num
+  }
+  print(num)
+}
+```
+
+We are going to use another variant of iteration, a `while` loop in our next exercise.
+
+A `while` loop works as follows.
+
+```{r}
+i <- 0
+while (i < 10) {
+  print(i)
+  i <- i + 1
+}
+```
+
+Notice in each iteration we first test if `i < 10`,  print `i` and then add
+1 to `i`. At the beginning of the iteration if we realize now `i` is
+already larger than 10 we stop. We use a for loop when we know at each
+iteration we should end so we can specify `for (i in start:end)`, whereas
+we use a `while` loop when we don't know at each iteration we will end.
+
+A typical use case in statistics is when we want to find the values of our
+parameters which will maximize the maximum likelihood (MLE) function, this
+would be the parameter value at which the derivative of the MLE function is
+zero. But for models like logistic regression, there is not values that
+would make it exactly zero, and we have to try out parameter values to find
+one that makes the derivative closest to zero. We cannot try out all
+possible parameter values because there are infinitely many, instead we say
+if it is close enough we stop So we would use something like
+`while(error > 0.01)` to implement this.
+
+## Exercise 3
+
+Use a `while` loop to implement the following search algorithm and apply it
+to a vector.
+
+The following search algorithm determines if a value is in a **sorted** vector:
+
+1. Find the middle element of the vector (e.g. for c(1, 2, 3, 5, 7) this
+   would be 3. If the vector length is an even number use the smaller one
+   of the two middle numbers)
+
+2. If the element we are searching for is smaller than this middle number
+   we restrict the search range to everything smaller than the middle number.
+
+   For example, if we are searching for 2 and 2 is smaller than the middle number 3 in
+   `c(1, 2, 3, 5, 7)` we restrict our search range to `c(1, 2)`.
+
+   If the element is larger than the middle number restrict the range to
+   anything larger than the middle number.
+
+3. Repeat step 1 and 2 in the restricted range. (e.g. the middle number of
+   `c(1, 2)` is 1 and 2 is smaller than 1 so we restrict the range to `c(2)`).
+
+4. If the element is equal to the middle number, print "True". Otherwise if
+   the search range has only one number left and is not equal to the
+   element we are searching for, print "False". (e.g. 2 is equal to 2 in
+   `c(2)` so we print `True`).
+
+**Hint: the code might look like this**
+
+```{r, eval = F}
+# Given an ordered sequence
+x <- c(1, 2, 3, 4, 5, 6, 9, 10)
+
+# Initiate variables to indicate our search range
+start <- 1
+end <- length(x)
+
+# We try to find the element 11 (not in the sequence)
+while (x[i] != 11 & "some condition") {
+  i <- (start + end) %/% 2
+}
+
+# This is the last line of your code
+if (x[i] == 11) print("TRUE") else print("FALSE")
+```
+
+```{r, eval = F}
+# Make sure it works for an element that's in the sequence
+while (x[i] != 9 & "some condition") {}
+```
+
+```{r, eval = F, echo = F}
+x <- c(1, 2, 3, 4, 5, 6, 9, 10)
+start <- 1
+end <- length(x)
+while (x[i] != 9 & start != end) {
+  i <- (start + end) %/% 2
+  if (x[i] < 9) {
+    start <- i
+  } else {
+    end <- i
+  }
+}
+if (x[i] == 9) print("TRUE") else print("FALSE")
+```
