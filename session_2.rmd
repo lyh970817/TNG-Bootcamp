@@ -62,7 +62,7 @@ a <- 10
 ```
 
 This is not just a matter of how much you have to type. Suppose now
-instead of assigning to variable `a` you want to instead assign to
+instead of assigning to variable `a` you want to assign to
 variable `b`, only one place in the first code chunk needs to be changed
 but it would be ten in the second!
 
@@ -70,11 +70,6 @@ This is not only relevant to how much you have to type but the more places
 you have to change the more likely you are to make mistakes. Readability
 can be oftentimes be another advantage, others reading your code might get
 overwhelmed with your code because of its lengthiness.
-
-Writing DRY code is important for dealing with messy datasets where
-often similar processing of the data needs to be repeated for many
-times, for instance renaming variables so that the naming follows a
-certain convention.
 
 ### Notes on exercises
 
@@ -117,7 +112,7 @@ and anything after `return` will not be executed.
 `return` can also take an expression, so we often use it to report back our
 "final product" produced by a function.
 
-R, however, does not necessarily require explicit `return`. The last expression is
+R, however, does not require explicit `return`. The last expression is
 automatically returned.
 
 
@@ -206,6 +201,7 @@ The second argument can be any function. Actually the previous line of code
 can be thought as equivalent to the following.
 
 ```{r}
+dat <- mtcars
 sapply(dat, function(col) {
   return(sum(col) / length(col))
 })
@@ -231,7 +227,7 @@ Taking advantage of this, We can easily define our own function in place.
 
 ```{r}
 sapply(dat, function(col) {
-  col[1:10] <- 0
+  col <- na.omit(col)
   return(col)
 })
 ```
@@ -314,9 +310,14 @@ dat <- mtcars
 ```
 
 ```{r, eval = TRUE, error = TRUE}
+dat <- mtcars
+library(tidyverse)
 dat <- map_df(dat, function(col) {
   if (any(col > 10)) {
     as.numeric(col)
+  }
+  else {
+    col
   }
 })
 ```
@@ -368,6 +369,7 @@ map2_dbl(mtcars, mtcars[1, ], function(x, y) {
   # `rowSums` function behaves similarly.
   sum(x < y)
 })
+map2_df(mtcars, dat, function(x, y) x + y)
 ```
 
 Or any number of objects
@@ -418,6 +420,8 @@ dat_new <- dat
 for (i in 2:ncol(dat_new)) {
   dat_new[dat_new[, i] == 0, i] <- NA
 }
+mtcars[grep("t", colnames(mtcars), value = T)]
+as_tibble(dat) > 3
 ```
 
 you can do
@@ -454,7 +458,7 @@ they don't work, try `map`. `for` loops should be your last resort.
 # Topic 2: Vectorization in practice
 
 We have seen some examples of some basic vectorized operations in the
-previous session, now we have a look at how we use this feature in
+previous session, now we have a look at how we would use this in
 practice.
 
 ```{r, eval = TRUE}
@@ -525,8 +529,7 @@ with `tidyverse`. But sometimes I still use `grep`, especially with the
 grep("t", colnames(mtcars), value = T)
 ```
 
-It is interesting (or maybe unexpected) that vectorization applies
-to dataframes as well.
+Vectorization applies to dataframes as well.
 
 ```{r, eval = TRUE}
 class(mtcars > 5)
@@ -608,18 +611,6 @@ indicator" is used for both vectors.
 For the second equivalence, they key is to pay attention to how logical
 vectors evaluated from vectors of the same lengths are matched in length.
 
-Because operators such as "==", ">" and "&" don't change the lengths of
-vectors they operate on.
-
-This idea of position and length matching is often useful with tabular data
-because the essence of tabular data is that they have columns and rows of
-the same lengths and an observations in a certain row will have all its
-attributes in that row. So you can be sure that no matter how complex the
-logic you use to select elements from a column, when you apply it to a
-different column, the results would belong to the same observations.
-
-This sounds utterly trivial but is very important to keep in mind.
-
 ## Named vectors
 
 Vectors, lists and dataframes (column names) can all have names in R. Using
@@ -652,9 +643,8 @@ But they get converted to characters.
 names(a)
 ```
 
-When would this be useful? The first scenario is when we are trying to
-implement something similar to our own version of labelled variables in
-SPSS.
+When would this be useful? The first scenario is when we want to have
+something similar to our own version of labelled variables in SPSS.
 
 You might have some short column names in a dataframe
 
@@ -934,9 +924,6 @@ Each Exercise except for Exercise 2 will have a data file in the
 Questions. In that case you should continue to use your data from the
 previous Question.
 
-Some of the exercises might not be easy to do, but we will go through them
-during the session and talk about any difficulties.
-
 ## Exercise 1
 
 **Question 1**
@@ -987,6 +974,8 @@ it works for both.
 Now write a function that determines whether each row of the dataframe contains
 any NAs.
 
+*Hint: Read documentation of `apply`. What arguments are available?*
+
 ```{r, echo = FALSE, eval = TRUE}
 is_rowna <- function(data) {
   as.logical(rowSums(is.na(data)))
@@ -1008,8 +997,6 @@ is_rowna(mtcars)
 Now test your function on a `dataframe` and a `tibble`. Make sure it
 works for both.
 
-*Hint: Read documentation of `apply`. What arguments are available?*
-
 # Exercise 2
 
 Write a function that, given a string vector of any number of elements with
@@ -1019,7 +1006,7 @@ positions. Create your own string and test it.
 ```{r, echo = FALSE, eval = TRUE}
 get_fields <- function(string, i, sep) {
   str_split(string, sep) %>%
-    map(., function(x) {
+    map(function(x) {
       x[i]
     })
 }
@@ -1035,20 +1022,6 @@ get_fields(string = s, i = c(1, 2), sep = "_")
 ```
 
 # Exercise 3
-
-# Fit a hurdle model and make a table
-
-Hint: after you get your model output, use
-`summary(your_model)`$coefficent` to get the required table.
-
-
-*Hint: `formula` objects are quite special in R. Read about them
-[here](https://www.datacamp.com/community/tutorials/r-formula-tutorial#formulas).
-Notice that in `var ~ x1 + x2`, `var`, `x1`, and `x2` are column names but
-they don't have quotes around, unlike when you use `dat["var"]` to select a
-column. What problem will this cause? You would need `as.formula` for this.*
-
-# Exercise 4
 
 An "array" variable in the UK Biobank database is a variable allowing
 multiple options to be selected at once.
@@ -1259,6 +1232,7 @@ to_array <- function(dat, prefix) {
   return(dat)
 }
 ```
+
 ```{r, eval = TRUE}
 dat <- tribble(
   ~Bacon, ~Omelette, ~Sausages, ~Mushrooms, ~Milk,
@@ -1300,6 +1274,7 @@ to_binary <- function(dat, names) {
   return(dat)
 }
 ```
+
 ```{r, eval = TRUE}
 dat <- tribble(
   ~breakfast_1, ~breakfast_2, ~breakfast_3, ~breakfast_4, ~breakfast_5,
@@ -1322,170 +1297,4 @@ to_binary(dat, names)
 
 Now check that your function returns the same dataframe as the one
 produced in Question 2 with `all.equal`.
-
-# Exercise 5
-
-**Question 1**
-
-Write a function that, given a dataframe of two columns representing a
-mapping between two sets of variable names ('new_name' and 'old_name'),
-returns the elements in 'new_name' that doesn't have exactly one
-corresponding 'old_name' and vice versa. The function output can be in
-whatever format as long as you can tell where the incorrect name mappings
-are.
-
-Note that the same names can appear multiple times in different rows.
-
-```{r, echo = FALSE, eval = TRUE, message = FALSE}
-
-test_name <- function(dat, from = 1) {
-  list <- list()
-  past <- vector()
-  for (i in 1:nrow(dat)) {
-    to <- 3 - from
-    name <- dat[[from]][i]
-    if (is.na(past[name])) {
-      past[name] <- dat[[to]][i]
-    } else {
-      if (past[name] != dat[[to]][i]) {
-        list[[name]] <- unique(c(past[name], list[[name]], dat[[to]][[i]]))
-      }
-    }
-  }
-  return(list)
-}
-name_map <- read_delim("./Data/dat_e5_demo.txt", delim = " ")
-```
-
-The output doesn't have to be the same as my function. As long as the
-output of your function is sufficient for you to complete Question 2 then
-it's fine.
-
-```{r, eval = TRUE}
-test_name(name_map, from = 1)
-test_name(name_map, from = 2)
-```
-
-**Question 2**
-
-Fix the names so that they have a one-to-one mapping. Check this with the function you wrote.
-
-**Question 3**
-
-There is a slightly simpler solution using `group_by` and `filter`. See if
-you can figure it out.
-
-*Hint: depending on how you approach this, you might need to be careful
-with `tidy evaluation` here, because tidyverse functions have no way of
-telling if an unquoted string is a variable or is a column name in your
-data (actually it always thinks it's the latter). The trick is to use
-`!!sym()` for variable. Refer to the reading if you want to know why.*
-
-```{r, echo = FALSE, eval = TRUE}
-test_name <- function(dat, from) {
-  f <- colnames(dat)[from]
-  t <- colnames(dat)[-from + 3]
-  tab <- dat %>%
-    group_by(!!sym(f)) %>%
-    filter(length(unique(!!sym(t))) != 1) %>%
-    pull()
-}
-```
-
-# Exercise 6
-
-Create a function that calculates the mode with `group_by` and `summarize`.
-
-Hint: `group_by` is most normally used on a factor. This is not the case
-for this question.  What happens when you use `group_by` on something else?
-and how does summarize act on grouped data?
-
-```{r}
-
-```
-
-
-# Appendix: Getting some overview of a large dataset
-
-How would you get an overall picture of the datasets if there are thousands
-of rows and columns and perhaps half of them are NAs?
-
-* `View` is not a good method.
-
-  It's slow and with many NAs you don't know how long you need to scroll
-  before seeing some actual values.
-
-  Some of you might become interested in using a code editor (with R VSCode
-  would be the best I've tried), which probably does not have such nice
-  functionalities as in RStudio.
-
-* `head` sometimes works but with many NAs at the beginning of the data it
-  is not giving much information.
-
-* Plotting is a good way but extreme values tend not to be shown.
-
-Now I will demonstrate how to use some different functions to get a more
-abstract overview of the data.
-
-For the entire dataframe
-
-```{r, eval = TRUE}
-names(mtcars)
-dim(mtcars)
-nrow(mtcars)
-ncol(mtcars)
-```
-
-For dataframe columns
-
-```{r, eval = TRUE}
-unique(mtcars["cyl"])
-table(mtcars["cyl"])
-summary(mtcars["cyl"])
-```
-
-But can be easily extended to the entire dataframe with `map`
-
-```{r}
-map(mtcars, unqiue)
-```
-
-## Obtaining a set of elements from a vector with NAs
-
-Suppose we have a vector (with some NAs, since you simply never see
-anything in real life withot NAs!)
-
-```{r, eval = TRUE}
-v <- c(1, 2, 3, 4, NA)
-```
-
-Now we want to get elments smaller than 4. It might be tempting to do this.
-
-```{r, eval = TRUE}
-v[v < 4]
-```
-
-However, note that there is an additional NA element at the end. This is
-because in `v<4`, `NA < 4` evaluates to NA. A way to overcome this is to safeguard it with `which`.
-
-```{r, eval = TRUE}
-v[which(v < 4)]
-which(v < 4)
-```
-
-You can be sure that `which` returns no NAs, just a bunch of integers.
-
-## Using summary functions
-
-You would almost always need `na.rm = T` or variants of which in summary
-functions like `mean`, `sum`, `rowSums`, `cor` etc. Because with this
-argument these functions return NAs if its input contains one or more NAs.
-
-```{r, eval = TRUE}
-sum(c(1, 2, NA))
-```
-
-```{r, eval = TRUE}
-sum(c(1, 2, NA), na.rm = T)
-```
 
