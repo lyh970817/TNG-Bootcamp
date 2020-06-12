@@ -1372,8 +1372,8 @@ Fix the names so that they have a one-to-one mapping. Check this with the functi
 
 **Question 3**
 
-There is a slightly simpler solution using `group_by` and `filter`. See if
-you can figure it out.
+There is a much simpler solution using `group_by` and `filter`. See if
+you can figure it out. Take a look at https://www.tidyverse.org/blog/2020/03/dplyr-1-0-0-summarise/.
 
 *Hint: depending on how you approach this, you might need to be careful
 with `tidy evaluation` here, because tidyverse functions have no way of
@@ -1388,7 +1388,8 @@ test_name <- function(dat, from) {
   tab <- dat %>%
     group_by(!!sym(f)) %>%
     filter(length(unique(!!sym(t))) != 1) %>%
-    pull()
+    summarize(old = unique(!!sym(t)), .groups = "keep")
+  return(tab)
 }
 ```
 
