@@ -1298,3 +1298,172 @@ to_binary(dat, names)
 Now check that your function returns the same dataframe as the one
 produced in Question 2 with `all.equal`.
 
+<<<<<<< HEAD
+=======
+# Exercise 5
+
+**Question 1**
+
+Write a function that, given a dataframe of two columns representing a
+mapping between two sets of variable names ('new_name' and 'old_name'),
+returns the elements in 'new_name' that doesn't have exactly one
+corresponding 'old_name' and vice versa. The function output can be in
+whatever format as long as you can tell where the incorrect name mappings
+are.
+
+Note that the same names can appear multiple times in different rows.
+
+```{r, echo = FALSE, eval = TRUE, message = FALSE}
+
+test_name <- function(dat, from = 1) {
+  list <- list()
+  past <- vector()
+  for (i in 1:nrow(dat)) {
+    to <- 3 - from
+    name <- dat[[from]][i]
+    if (is.na(past[name])) {
+      past[name] <- dat[[to]][i]
+    } else {
+      if (past[name] != dat[[to]][i]) {
+        list[[name]] <- unique(c(past[name], list[[name]], dat[[to]][[i]]))
+      }
+    }
+  }
+  return(list)
+}
+name_map <- read_delim("./Data/dat_e5_demo.txt", delim = " ")
+```
+
+The output doesn't have to be the same as my function. As long as the
+output of your function is sufficient for you to complete Question 2 then
+it's fine.
+
+```{r, eval = TRUE}
+test_name(name_map, from = 1)
+test_name(name_map, from = 2)
+```
+
+**Question 2**
+
+Fix the names so that they have a one-to-one mapping. Check this with the function you wrote.
+
+**Question 3**
+
+There is a much simpler solution using `group_by` and `filter`. See if
+you can figure it out. Take a look at https://www.tidyverse.org/blog/2020/03/dplyr-1-0-0-summarise/.
+
+*Hint: depending on how you approach this, you might need to be careful
+with `tidy evaluation` here, because tidyverse functions have no way of
+telling if an unquoted string is a variable or is a column name in your
+data (actually it always thinks it's the latter). The trick is to use
+`!!sym()` for variable. Refer to the reading if you want to know why.*
+
+```{r, echo = FALSE, eval = TRUE}
+test_name <- function(dat, from) {
+  f <- colnames(dat)[from]
+  t <- colnames(dat)[-from + 3]
+  tab <- dat %>%
+    group_by(!!sym(f)) %>%
+    filter(length(unique(!!sym(t))) != 1) %>%
+    summarize(old = unique(!!sym(t)), .groups = "keep")
+  return(tab)
+}
+```
+
+# Exercise 6
+
+Create a function that calculates the mode with `group_by` and `summarize`.
+
+Hint: `group_by` is most normally used on a factor. This is not the case
+for this question.  What happens when you use `group_by` on something else?
+and how does summarize act on grouped data?
+
+```{r}
+
+```
+
+
+# Appendix: Getting some overview of a large dataset
+
+How would you get an overall picture of the datasets if there are thousands
+of rows and columns and perhaps half of them are NAs?
+
+* `View` is not a good method.
+
+  It's slow and with many NAs you don't know how long you need to scroll
+  before seeing some actual values.
+
+  Some of you might become interested in using a code editor (with R VSCode
+  would be the best I've tried), which probably does not have such nice
+  functionalities as in RStudio.
+
+* `head` sometimes works but with many NAs at the beginning of the data it
+  is not giving much information.
+
+* Plotting is a good way but extreme values tend not to be shown.
+
+Now I will demonstrate how to use some different functions to get a more
+abstract overview of the data.
+
+For the entire dataframe
+
+```{r, eval = TRUE}
+names(mtcars)
+dim(mtcars)
+nrow(mtcars)
+ncol(mtcars)
+```
+
+For dataframe columns
+
+```{r, eval = TRUE}
+unique(mtcars["cyl"])
+table(mtcars["cyl"])
+summary(mtcars["cyl"])
+```
+
+But can be easily extended to the entire dataframe with `map`
+
+```{r}
+map(mtcars, unqiue)
+```
+
+## Obtaining a set of elements from a vector with NAs
+
+Suppose we have a vector (with some NAs, since you simply never see
+anything in real life withot NAs!)
+
+```{r, eval = TRUE}
+v <- c(1, 2, 3, 4, NA)
+```
+
+Now we want to get elments smaller than 4. It might be tempting to do this.
+
+```{r, eval = TRUE}
+v[v < 4]
+```
+
+However, note that there is an additional NA element at the end. This is
+because in `v<4`, `NA < 4` evaluates to NA. A way to overcome this is to safeguard it with `which`.
+
+```{r, eval = TRUE}
+v[which(v < 4)]
+which(v < 4)
+```
+
+You can be sure that `which` returns no NAs, just a bunch of integers.
+
+## Using summary functions
+
+You would almost always need `na.rm = T` or variants of which in summary
+functions like `mean`, `sum`, `rowSums`, `cor` etc. Because with this
+argument these functions return NAs if its input contains one or more NAs.
+
+```{r, eval = TRUE}
+sum(c(1, 2, NA))
+```
+
+```{r, eval = TRUE}
+sum(c(1, 2, NA), na.rm = T)
+```
+

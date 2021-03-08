@@ -689,6 +689,13 @@ dat1 <- dat %>%
     "SD" = dem.age_mean_by_sex
   ) %>%
   filter(bmi.cur > 20)
+
+dat1 <- dat
+dat1[c("dem.age", "dem.alevels", "dem.employment", "bmi.cur")]
+dat1$Mean <- mean(dat1$dem.age, na.rm = T)
+dat1$dem.age.sd_by_sex <- sd(dat1$dem.age, na.rm = T)
+names(dat1)[33] <- "Mean"
+dat1[dat1$bmi.cur > 20, ]
 ```
 
 As the next two exercises mainly concerns writing loops, we need to look a
